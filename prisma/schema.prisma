@@ -1,0 +1,119 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  BUYER
+  SUPPLIER
+  ADMIN
+}
+
+enum RfqStatus {
+  OPEN
+  IN_PROGRESS
+  CLOSED
+  AWARDED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  fullName     String
+  role         Role     @default(BUYER)
+  companyId    String?
+  avatarUrl    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  company      Company?  @relation(fields: [companyId], references: [id])
+  rfqsCreated  Rfq[]     @relation("RfqCreator")
+  messages     Message[]
+  participations ConversationParticipant[]
+
+  @@map("users")
+}
+
+model Company {
+  id          String   @id @default(cuid())
+  name        String
+  type        String   // "hotel" | "supplier" | "contractor"
+  country     String?
+  city        String?
+  website     String?
+  description String?
+  createdAt   DateTime @default(now())
+
+  users User[]
+  rfqs  Rfq[]
+
+  @@map("companies")
+}
+
+model Rfq {
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  category    String    // e.g. "furniture", "lighting"
+  quantity    String?
+  location    String?
+  budget      String?
+  status      RfqStatus @default(OPEN)
+  creatorId   String
+  companyId   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  creator      User         @relation("RfqCreator", fields: [creatorId], references: [id])
+  company      Company?     @relation(fields: [companyId], references: [id])
+  conversations Conversation[]
+
+  @@index([status])
+  @@index([category])
+  @@map("rfqs")
+}
+
+model Conversation {
+  id        String   @id @default(cuid())
+  rfqId     String?
+  subject   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  rfq          Rfq?                      @relation(fields: [rfqId], references: [id])
+  participants ConversationParticipant[]
+  messages     Message[]
+
+  @@map("conversations")
+}
+
+model ConversationParticipant {
+  id             String @id @default(cuid())
+  conversationId String
+  userId         String
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@map("conversation_participants")
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  conversationId String
+  senderId       String
+  body           String
+  createdAt      DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation(fields: [senderId], references: [id])
+
+  @@index([conversationId])
+  @@map("messages")
+}
